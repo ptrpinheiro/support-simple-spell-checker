@@ -1,3 +1,6 @@
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});
 const MODEL_URL = chrome.runtime.getURL('models/model.json');
 
 let modelPromise;

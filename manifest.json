@@ -5,6 +5,9 @@
   "description": "Lightweight inline spell checking using an embedded AI model.",
   "permissions": ["storage"],
   "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Open spell checker options"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -12,14 +15,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "js": ["contentScript.js"]
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["models/model.json"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  "options_page": "options.html"
 }

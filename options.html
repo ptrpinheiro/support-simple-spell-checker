@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spell Checker Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="options">
+      <header>
+        <h1>Spell Checker Options</h1>
+        <p>Customize how the spell checker behaves across supported sites.</p>
+      </header>
+
+      <form id="options-form">
+        <section class="card">
+          <label class="toggle">
+            <input type="checkbox" id="enabled" />
+            <span>Enable spell checking</span>
+          </label>
+
+          <label class="field">
+            <span>Default language</span>
+            <select id="language">
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="de-DE">German</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Custom dictionary (comma separated)</span>
+            <textarea id="customWords" rows="3" placeholder="e.g. OpenAI, ChatGPT"></textarea>
+          </label>
+        </section>
+
+        <section class="card">
+          <h2>Site allowlist</h2>
+          <p class="help">Only run spell checking on these sites (one per line).</p>
+          <textarea id="allowlist" rows="4" placeholder="example.com"></textarea>
+        </section>
+
+        <section class="actions">
+          <button type="submit">Save options</button>
+          <span id="status" role="status" aria-live="polite"></span>
+        </section>
+      </form>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

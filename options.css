@@ -1,0 +1,125 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+  padding: 32px;
+  background: #f4f6fb;
+  color: #1b1f2a;
+}
+
+.options {
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+header h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+header p {
+  margin: 0;
+  color: #4b5563;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 16px;
+}
+
+.field,
+.toggle {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.field span,
+.toggle span {
+  color: #1f2937;
+}
+
+select,
+textarea {
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.help {
+  margin: 0;
+  color: #6b7280;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+button {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2563eb;
+}
+
+#status {
+  font-weight: 600;
+  color: #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  header p {
+    color: #94a3b8;
+  }
+
+  .card {
+    background: #111827;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.5);
+  }
+
+  select,
+  textarea {
+    background: #0f172a;
+    border-color: #1f2937;
+    color: #e2e8f0;
+  }
+
+  .field span,
+  .toggle span {
+    color: #e2e8f0;
+  }
+
+  .help {
+    color: #9ca3af;
+  }
+}
