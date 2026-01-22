@@ -1,13 +1,28 @@
 chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
-const MODEL_URL = chrome.runtime.getURL('models/model.json');
 
-let modelPromise;
+const defaultOptions = {
+  enabled: true,
+  language: 'en-US',
+  customWords: '',
+  allowlist: ''
+};
 
-async function loadModel() {
-  if (!modelPromise) {
-    modelPromise = fetch(MODEL_URL)
+const modelCache = new Map();
+let currentOptions = { ...defaultOptions };
+
+function getModelUrl(language) {
+  if (language === 'pt-PT') {
+    return chrome.runtime.getURL('models/pt.json');
+  }
+  return chrome.runtime.getURL('models/model.json');
+}
+
+async function loadModel(language) {
+  const modelUrl = getModelUrl(language);
+  if (!modelCache.has(modelUrl)) {
+    const modelPromise = fetch(modelUrl)
       .then((response) => response.json())
       .then((data) => {
         return {
@@ -16,9 +31,92 @@ async function loadModel() {
           bigramScores: data.bigramScores ?? {}
         };
       });
+    modelCache.set(modelUrl, modelPromise);
   }
-  return modelPromise;
+  return modelCache.get(modelUrl);
 }
+
+function parseCustomWords(customWords) {
+  return new Set(
+    customWords
+      .split(',')
+      .map((word) => word.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function isAllowlisted(url, allowlist) {
+  if (!url) return true;
+  if (!allowlist) return true;
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  const entries = allowlist
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) return true;
+  return entries.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+}
+
+async function loadOptions() {
+  const stored = await chrome.storage.sync.get(defaultOptions);
+  currentOptions = { ...defaultOptions, ...stored };
+  return currentOptions;
+}
+
+async function updateBadgeForTab(tabId, url) {
+  const options = currentOptions;
+  const isActive = options.enabled && isAllowlisted(url, options.allowlist);
+  await chrome.action.setBadgeText({ tabId, text: isActive ? 'ON' : '' });
+  if (isActive) {
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#10b981' });
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  loadOptions().then(async () => {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all(
+      tabs.map((tab) => updateBadgeForTab(tab.id, tab.url))
+    );
+  });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  loadOptions().then(async () => {
+    const tabs = await chrome.tabs.query({});
+    await Promise.all(
+      tabs.map((tab) => updateBadgeForTab(tab.id, tab.url))
+    );
+  });
+});
+
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  const tab = await chrome.tabs.get(tabId);
+  await updateBadgeForTab(tabId, tab.url);
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete') {
+    updateBadgeForTab(tabId, tab.url);
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return;
+  Object.keys(changes).forEach((key) => {
+    currentOptions[key] = changes[key].newValue;
+  });
+  chrome.tabs.query({}).then((tabs) => {
+    tabs.forEach((tab) => updateBadgeForTab(tab.id, tab.url));
+  });
+});
+
+loadOptions();
 
 function scoreWord(word, bigramScores) {
   const normalized = word.toLowerCase();
@@ -32,7 +130,7 @@ function scoreWord(word, bigramScores) {
 }
 
 function editDistanceOne(word) {
-  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const letters = 'abcdefghijklmnopqrstuvwxyzáàâãäéêëíïóôõöúüç';
   const splits = [];
   for (let i = 0; i <= word.length; i += 1) {
     splits.push([word.slice(0, i), word.slice(i)]);
@@ -54,10 +152,11 @@ function editDistanceOne(word) {
   return new Set([...deletes, ...transposes, ...replaces, ...inserts]);
 }
 
-function rankCandidates(token, candidates, model) {
+function rankCandidates(token, candidates, model, customWords) {
   const scored = [];
   for (const candidate of candidates) {
-    if (!model.dictionary.has(candidate)) continue;
+    const isKnown = model.dictionary.has(candidate) || customWords.has(candidate);
+    if (!isKnown) continue;
     const frequency = model.frequencies[candidate] ?? 1;
     const score = scoreWord(candidate, model.bigramScores);
     scored.push({ candidate, score: score + Math.log(frequency) });
@@ -69,13 +168,18 @@ function rankCandidates(token, candidates, model) {
 }
 
 async function suggestCorrections(token) {
-  const model = await loadModel();
+  const options = currentOptions.enabled ? currentOptions : await loadOptions();
+  if (!options.enabled) {
+    return { isCorrect: true, suggestions: [] };
+  }
+  const model = await loadModel(options.language);
   const normalized = token.toLowerCase();
-  if (!normalized || model.dictionary.has(normalized)) {
+  const customWords = parseCustomWords(options.customWords);
+  if (!normalized || model.dictionary.has(normalized) || customWords.has(normalized)) {
     return { isCorrect: true, suggestions: [] };
   }
   const candidates = editDistanceOne(normalized);
-  const suggestions = rankCandidates(normalized, candidates, model);
+  const suggestions = rankCandidates(normalized, candidates, model, customWords);
   return { isCorrect: suggestions.length === 0, suggestions };
 }
 

@@ -13,6 +13,15 @@ const suggestionState = {
   suggestions: []
 };
 
+const defaultOptions = {
+  enabled: true,
+  language: 'en-US',
+  customWords: '',
+  allowlist: ''
+};
+
+let currentOptions = { ...defaultOptions };
+
 const uiRoot = document.createElement('div');
 const shadow = uiRoot.attachShadow({ mode: 'open' });
 const bubble = document.createElement('div');
@@ -30,13 +39,15 @@ style.textContent = `
     font-size: 12px;
     display: none;
     max-width: 240px;
+    flex-wrap: wrap;
+    gap: 6px;
   }
   .bubble button {
     background: transparent;
     border: none;
     color: inherit;
     cursor: pointer;
-    margin: 0 4px 0 0;
+    margin: 0;
     padding: 0;
     font: inherit;
   }
@@ -49,6 +60,26 @@ bubble.className = 'bubble';
 shadow.append(style, bubble);
 document.documentElement.appendChild(uiRoot);
 
+async function loadOptions() {
+  try {
+    const stored = await chrome.storage.sync.get(defaultOptions);
+    currentOptions = { ...defaultOptions, ...stored };
+  } catch {
+    currentOptions = { ...defaultOptions };
+  }
+}
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'sync') return;
+  const updated = { ...currentOptions };
+  Object.keys(changes).forEach((key) => {
+    updated[key] = changes[key].newValue;
+  });
+  currentOptions = updated;
+});
+
+loadOptions();
+
 function isEditable(target) {
   if (!target) return false;
   if (target.isContentEditable) return true;
@@ -59,13 +90,27 @@ function isEditable(target) {
   return false;
 }
 
+function isAllowedForHost(hostname, allowlist) {
+  if (!allowlist) return true;
+  const entries = allowlist
+    .split('\n')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) return true;
+  return entries.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+}
+
+function getWordMatch(text, regex) {
+  return text.match(regex);
+}
+
 function getWordFromInput(target) {
   const position = target.selectionStart ?? 0;
   const value = target.value ?? '';
   const left = value.slice(0, position);
   const right = value.slice(position);
-  const leftMatch = left.match(/[A-Za-z]+$/);
-  const rightMatch = right.match(/^[A-Za-z]+/);
+  const leftMatch = getWordMatch(left, /[\p{L}]+$/u);
+  const rightMatch = getWordMatch(right, /^[\p{L}]+/u);
   const word = `${leftMatch ? leftMatch[0] : ''}${rightMatch ? rightMatch[0] : ''}`;
   const start = position - (leftMatch ? leftMatch[0].length : 0);
   const end = position + (rightMatch ? rightMatch[0].length : 0);
@@ -81,8 +126,8 @@ function getWordFromContentEditable(target) {
   const offset = range.startOffset;
   const left = text.slice(0, offset);
   const right = text.slice(offset);
-  const leftMatch = left.match(/[A-Za-z]+$/);
-  const rightMatch = right.match(/^[A-Za-z]+/);
+  const leftMatch = getWordMatch(left, /[\p{L}]+$/u);
+  const rightMatch = getWordMatch(right, /^[\p{L}]+/u);
   const word = `${leftMatch ? leftMatch[0] : ''}${rightMatch ? rightMatch[0] : ''}`;
   const startOffset = offset - (leftMatch ? leftMatch[0].length : 0);
   const endOffset = offset + (rightMatch ? rightMatch[0].length : 0);
@@ -110,7 +155,7 @@ function showSuggestions(rect, suggestions) {
     button.addEventListener('click', () => applySuggestion(suggestion));
     bubble.appendChild(button);
   });
-  bubble.style.display = suggestions.length ? 'block' : 'none';
+  bubble.style.display = suggestions.length ? 'flex' : 'none';
   if (rect) positionBubble(rect);
 }
 
@@ -150,6 +195,14 @@ function handleSpellcheckResult(result) {
 
 const requestSpellcheck = debounce((target) => {
   if (!target) return;
+  if (!currentOptions.enabled) {
+    hideBubble();
+    return;
+  }
+  if (!isAllowedForHost(window.location.hostname, currentOptions.allowlist)) {
+    hideBubble();
+    return;
+  }
   if (target.isContentEditable) {
     const wordData = getWordFromContentEditable(target);
     if (!wordData || !wordData.word) {
@@ -159,7 +212,10 @@ const requestSpellcheck = debounce((target) => {
     suggestionState.activeElement = target;
     suggestionState.range = wordData.range;
     suggestionState.word = wordData.word;
-    chrome.runtime.sendMessage({ type: 'SPELLCHECK', token: wordData.word }, handleSpellcheckResult);
+    chrome.runtime.sendMessage(
+      { type: 'SPELLCHECK', token: wordData.word },
+      handleSpellcheckResult
+    );
     return;
   }
 
@@ -171,7 +227,10 @@ const requestSpellcheck = debounce((target) => {
   suggestionState.activeElement = target;
   suggestionState.range = { start: wordData.start, end: wordData.end };
   suggestionState.word = wordData.word;
-  chrome.runtime.sendMessage({ type: 'SPELLCHECK', token: wordData.word }, handleSpellcheckResult);
+  chrome.runtime.sendMessage(
+    { type: 'SPELLCHECK', token: wordData.word },
+    handleSpellcheckResult
+  );
 }, 200);
 
 function onInput(event) {
